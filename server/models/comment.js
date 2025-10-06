@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const commentSchema = new Schema({
-  // 📄 Comment Content
+    // 📄 Comment Content
     content: {
         type: String,
         required: true,
@@ -30,7 +30,7 @@ const commentSchema = new Schema({
         default: null,
     },
 
-    // ✅ Moderation Fields (optional)
+    // ✅ Moderation Fields
     isDeleted: {
         type: Boolean,
         default: false,
@@ -39,12 +39,10 @@ const commentSchema = new Schema({
     flagged: {
         type: Boolean,
         default: false,
-    },
+    }
 
-    // 🕒 Timestamps
-    }, {
-    timestamps: true // createdAt, updatedAt
-    });
+}, {
+    timestamps: true // 🕒 createdAt, updatedAt
+});
 
 module.exports = mongoose.model('Comment', commentSchema);
-

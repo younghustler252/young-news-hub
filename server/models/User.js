@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema({
         trim: true,
     },
 
-    passwordHash: {
+    password: {
         type: String,
         required: true,
     },
@@ -102,5 +102,18 @@ const userSchema = new mongoose.Schema({
     timestamps: true // adds createdAt and updatedAt automatically
 });
 
+userSchema.pre('save', async function (next) {
+	const user = this;
 
+	// Only hash if the password was modified or is new
+	if (!user.isModified('passwordHash')) return next();
+
+	try {
+		const salt = await bcrypt.genSalt(10);
+		user.passwordHash = await bcrypt.hash(user.passwordHash, salt);
+		next();
+	} catch (err) {
+		next(err);
+	}
+});
 module.exports = mongoose.model('User', userSchema);
