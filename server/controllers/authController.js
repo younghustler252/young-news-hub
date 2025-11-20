@@ -1,4 +1,4 @@
-const User = require('../models/User');
+const User = require('../models/User'); 
 const asyncHandler = require('express-async-handler');
 const generateToken = require('../utils/generateToken');
 const sendEmailCode = require('../utils/sendEmailCode');
@@ -7,39 +7,35 @@ const generateCode = require('../utils/generateCode')
 const { saveCode, verifyCode } = require('../utils/codeStore');
 
 
-// @desc    Register new user
-// @route   POST /api/users/register
+// @desc    Register new user (only email, name, password)
+// @route   POST /api/auth/register
 // @access  Public
 const registerUser = asyncHandler(async (req, res) => {
-    const { name, email, phone, password,  method = 'email' } = req.body;
+    const { name, email, password, method = 'email' } = req.body;
 
     // Input validation
-    if (!name || !email || !phone || !password) {
+    if (!name || !email || !password) {
         res.status(400);
-        throw new Error("All fields are required");
+        throw new Error("Name, email, and password are required");
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ $or: [{ email }, { phone }] });
+    // Check if user already exists by email
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
         res.status(409);
-        throw new Error("User already exists");
+        throw new Error("User with this email already exists");
     }
 
-    // Create and save new user
-    const user = new User({ name, email, phone, password });
+    // Create user with minimal info, phone empty for now
+    const user = new User({ name, email, password });
     await user.save();
 
+    // Generate verification code for email
     const code = generateCode();
 
     try {
-        if (method === 'sms') {
-            await sendSmsCode(phone, code);
-            saveCode(phone, code);
-        } else {
-            await sendEmailCode(email, code);
-            saveCode(email, code);
-        }
+        await sendEmailCode(email, code);
+        saveCode(email, code);
     } catch (error) {
         console.error("Failed to send verification code:", error.message);
         return res.status(201).json({
@@ -48,70 +44,72 @@ const registerUser = asyncHandler(async (req, res) => {
             verificationPending: true
         });
     }
-        
 
-
-    // Respond with user data and token
     res.status(201).json({
-        message: `Verification code sent via ${method || 'email'}`,
+        message: `Verification code sent via email`,
         userId: user._id,
+        verificationPending: true
     });
 });
 
+
 // @desc    Login user
-// @route   POST /api/users/login
+// @route   POST /api/auth/login
 // @access  Public
 const loginUser = asyncHandler(async (req, res) => {
-	const { identifier, password } = req.body;
+    const { identifier, password } = req.body;
 
-	if (!identifier || !password) {
-		res.status(400);
-		throw new Error("Email or phone and password are required");
-	}
+    if (!identifier || !password) {
+        res.status(400);
+        throw new Error("Email or phone and password are required");
+    }
 
-	// Try finding user by either email or phone
-	const user = await User.findOne({
-		$or: [{ email: identifier }, { phone: identifier }]
-	}).select("+password");
+    const user = await User.findOne({
+        $or: [{ email: identifier }, { phone: identifier }]
+    }).select("+password");
 
-	if (!user) {
-		res.status(401);
-		throw new Error("Invalid email or phone");
-	}
+    if (!user || !(await user.comparePassword(password))) {
+        res.status(401);
+        throw new Error("Invalid credentials");
+    }
 
-	const isMatch = await user.comparePassword(password);
-	if (!isMatch) {
-		res.status(401);
-		throw new Error("Invalid password");
-	}
-    console.log("User from DB:", user);
+    // Optional verification check (uncomment if needed)
+    // if (!user.isVerified) {
+    //     res.status(403);
+    //     throw new Error("Account not verified. Please verify first.");
+    // }
 
-	res.status(200).json({
-		status: "success",
-		message: "Login successful",
-		data: {
-			user: {
-				_id: user._id,
-				name: user.name,
-				email: user.email,
-				role: user.role,
-                isVerified: user.isVerified,
-			},
-			token: generateToken(user._id),
-		},
-	});
+    res.status(200).json({
+        status: "success",
+        message: "Login successful",
+        user: {
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            isVerified: user.isVerified,
+        },
+        token: generateToken(user._id),
+    });
 });
 
 
-const verifyUser = asyncHandler(async (req, res) => {
 
-    const { identifier, code } = req.body; 
+
+// @desc    Verify email or phone code
+// @route   POST /api/auth/verify
+// @access  Public
+const verifyUser = asyncHandler(async (req, res) => {
+    const { identifier, code, type = 'email' } = req.body; 
+    // type can be 'email' or 'phone'
+
     if (!identifier || !code) {
         res.status(400);
-        throw new Error("Email or phone and code are required");
+        throw new Error("Identifier and code are required");
     }
     
-    const user = await User.findOne({ $or: [{ email: identifier }, { phone: identifier }] });
+    const query = type === 'phone' ? { phone: identifier } : { email: identifier };
+    const user = await User.findOne(query);
     if (!user) {
         res.status(404);
         throw new Error("User not found");
@@ -122,12 +120,19 @@ const verifyUser = asyncHandler(async (req, res) => {
         res.status(400);
         throw new Error("Invalid or expired code");
     }
-    user.isVerified = true;
-    user.verifiedAt = new Date();
+
+    if (type === 'email') {
+        user.isVerified = true;
+        user.verifiedAt = new Date();
+    } else if (type === 'phone') {
+        user.isPhoneVerified = true;
+        user.phoneVerifiedAt = new Date();
+    }
+
     await user.save();
   
     res.status(200).json({
-        message: "User verified successfully",
+        message: `${type === 'email' ? 'Email' : 'Phone'} verified successfully`,
         token: generateToken(user._id),
         user: {
             _id: user._id,
@@ -135,30 +140,43 @@ const verifyUser = asyncHandler(async (req, res) => {
             email: user.email,
             phone: user.phone,
             role: user.role,
+            isVerified: user.isVerified,
+            isPhoneVerified: user.isPhoneVerified || false,
         }
     }); 
-
 });
 
 
+// @desc    Resend verification code (email or phone)
+// @route   POST /api/auth/resend-code
+// @access  Public
 const resendCode = asyncHandler(async (req, res) => {
-    const {identifier, method= 'email'} = req.body;
+    const { identifier, method = 'email' } = req.body;
 
     if (!identifier) {
         res.status(400);
-        throw new Error("Email or phone is required");
+        throw new Error("Identifier is required");
     }
 
-    const user = await User.findOne({
-        $or: [{ email: identifier }, { phone: identifier }]
-    })
+    const query = method === 'sms' ? { phone: identifier } : { email: identifier };
+    const user = await User.findOne(query);
 
-    if (user.isVerified) {
+    if (!user) {
+        res.status(404);
+        throw new Error("User not found");
+    }
+
+    // Check verification status for chosen method
+    if (method === 'email' && user.isVerified) {
         res.status(400);
-        throw new Error("User is already verified");
+        throw new Error("Email is already verified");
+    }
+    if (method === 'sms' && user.isPhoneVerified) {
+        res.status(400);
+        throw new Error("Phone number is already verified");
     }
 
-     const code = generateCode();
+    const code = generateCode();
 
     try {
         if (method === 'sms') {
@@ -180,4 +198,26 @@ const resendCode = asyncHandler(async (req, res) => {
     }
 });
 
-module.exports = { registerUser, loginUser, verifyUser, resendCode};
+
+// @desc    Check username availability
+// @route   GET /api/auth/check-username
+// @access  Public
+const checkUsername = asyncHandler(async (req, res) => {
+    const { username } = req.query;
+    if (!username) {
+        res.status(400);
+        throw new Error("Username query param required");
+    }
+    const userExists = await User.findOne({ username: username.toLowerCase() });
+    res.status(200).json({ available: !userExists });
+});
+
+
+
+module.exports = { 
+    registerUser, 
+    loginUser, 
+    verifyUser, 
+    resendCode, 
+    checkUsername, 
+};
