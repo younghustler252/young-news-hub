@@ -1,6 +1,5 @@
 const User = require('../models/User');
 const Post = require('../models/Post');
-const Notification = require('../models/Notification');
 const asyncHandler = require('express-async-handler');
 const {sendNotification} = require('../utils/notificationUtils')
 

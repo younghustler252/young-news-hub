@@ -29,7 +29,10 @@ connectDB();
 // ⚙️ Middlewares
 app.use(logger);
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+    origin: 'https://everyvoice.netlify.app',
+    credentials: false
+}));
 app.use(helmet());
 
 // ✅ Create HTTP server and attach Socket.io
