@@ -1,189 +1,169 @@
-import React, { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { useCompleteProfile } from "../../hooks/useUser"; // Assuming the hook is in hooks/useUser.js
-import Input from "../../components/ui/Input"; // Reusable Input component
-import Button from "../../components/ui/Button"; // Reusable Button component
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useCompleteProfile, useCheckUsername } from "../../hooks/useUser";
+import Input from "../../components/ui/Input";
+import Button from "../../components/ui/Button";
+import Alert from "../../components/ui/Alert";
+import { ROUTE } from "../../routes/route";
+import { Spinner } from "../../components/ui/Loader";
+import toast from "react-hot-toast";
 
 const CompleteProfile = () => {
-  const { state } = useLocation();
   const navigate = useNavigate();
+  const { completeProfile, loading } = useCompleteProfile();
+  const { checkUsername } = useCheckUsername();
 
-  const [username, setUsername] = useState("");
-  const [bio, setBio] = useState("");
-  const [phone, setPhone] = useState("");
-  const [accountType, setAccountType] = useState("user");
-  const [location, setLocation] = useState("");
-  const [website, setWebsite] = useState("");
-  const [currentStep, setCurrentStep] = useState(1);
+  const [step, setStep] = useState(1);
+  const [stepError, setStepError] = useState("");
+  const [checkingUsername, setCheckingUsername] = useState(false);
 
-  // Use the custom hook for completing the profile
-  const { completeProfile, loading, error } = useCompleteProfile();
+  const [formData, setFormData] = useState({
+    username: "",
+    bio: "",
+    phone: "",
+    location: "",
+    website: "",
+  });
 
-  // Validate and move to the next step
-  const handleUsernameSubmit = async () => {
-    if (!username) return alert("Username is required!");
-
-    // Check if username is available through API call
-    // (you can integrate this logic with your API request to check username)
-    const isUsernameAvailable = true; // Replace with actual check
-    if (isUsernameAvailable) {
-      setCurrentStep(2); // Move to next step if username is available
-    } else {
-      alert("Username already taken!");
-    }
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setStepError(""); // clear step error on input
   };
 
-  const handleFinalSubmit = async (e) => {
-    e.preventDefault();
-    const userData = {
-      username,
-      bio,
-      phone,
-      accountType,
-      location,
-      website,
-    };
+  const handleNext = async () => {
+    setStepError("");
 
-    const data = await completeProfile(userData); // Call the hook's function to complete profile
-    if (data) {
-      alert("Profile completed successfully!");
-      navigate("/login"); // Redirect on successful profile completion
+    if (step === 1) {
+      if (!formData.username.trim())
+        return setStepError("Username is required");
+
+      setCheckingUsername(true);
+      try {
+        const res = await checkUsername(formData.username.trim());
+        if (!res.available) return setStepError("Username is already taken");
+      } catch (err) {
+        return setStepError(err.message || "Failed to validate username");
+      } finally {
+        setCheckingUsername(false);
+      }
+    }
+
+    setStep(step + 1);
+  };
+
+  const handlePrev = () => {
+    setStepError("");
+    setStep(step - 1);
+  };
+
+  const handleSubmit = async () => {
+    setStepError("");
+    try {
+      const data = await completeProfile(formData);
+      if (data?.user) {
+        toast.success("Profile completed successfully!");
+        navigate(ROUTE.home, { replace: true });
+      }
+    } catch (err) {
+      setStepError(err.message || "Profile completion failed");
     }
   };
 
   return (
-    <div className="w-full bg-white shadow-md rounded-lg p-6 space-y-6">
-      <h2 className="text-2xl font-semibold text-center mb-6">
-        Complete Your Profile
-      </h2>
+    <div className="max-w-md mx-auto mt-10 space-y-4">
+      {stepError && <Alert type="error" message={stepError} />}
 
       {/* Step 1: Username */}
-      {currentStep === 1 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-700">
-            Choose a Username
-          </h3>
-          <Input
-            label="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Choose a username"
-            required
-          />
-          <Button
-            variant="primary"
-            full
-            onClick={handleUsernameSubmit}
-            disabled={loading}
-          >
-            {loading ? "Checking..." : "Next"}
-          </Button>
-        </div>
+      {step === 1 && (
+        <Input
+          label="Username"
+          name="username"
+          placeholder="Choose a username"
+          value={formData.username}
+          onChange={handleChange}
+          required
+        />
       )}
 
-      {/* Step 2: Bio */}
-      {currentStep === 2 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-700">
-            Write a Short Bio
-          </h3>
+      {/* Step 2: Bio & Phone */}
+      {step === 2 && (
+        <>
           <Input
-            label="Bio (Optional)"
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            placeholder="Write a short bio"
-            type="text"
-          />
-          <Button
-            variant="primary"
-            full
-            onClick={() => setCurrentStep(3)}
-            disabled={loading}
-          >
-            Next
-          </Button>
-        </div>
-      )}
-
-      {/* Step 3: Phone */}
-      {currentStep === 3 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-700">
-            Enter Your Phone Number
-          </h3>
-          <Input
-            label="Phone (Optional)"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Enter phone number"
-          />
-          <Button
-            variant="primary"
-            full
-            onClick={() => setCurrentStep(4)}
-            disabled={loading}
-          >
-            Next
-          </Button>
-        </div>
-      )}
-
-      {/* Step 4: Account Type */}
-      {currentStep === 4 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-700">
-            Select Account Type
-          </h3>
-          <select
-            value={accountType}
-            onChange={(e) => setAccountType(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring focus:border-blue-400"
-          >
-            <option value="user">User</option>
-            <option value="creator">Creator</option>
-            <option value="company">Company</option>
-            <option value="recruiter">Recruiter</option>
-          </select>
-          <Button
-            variant="primary"
-            full
-            onClick={() => setCurrentStep(5)}
-            disabled={loading}
-          >
-            Next
-          </Button>
-        </div>
-      )}
-
-      {/* Step 5: Location and Website */}
-      {currentStep === 5 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-700">Additional Info</h3>
-          <Input
-            label="Location (Optional)"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="Enter your location"
+            label="Bio"
+            name="bio"
+            placeholder="Tell us about yourself"
+            value={formData.bio}
+            onChange={handleChange}
           />
           <Input
-            label="Website (Optional)"
-            value={website}
-            onChange={(e) => setWebsite(e.target.value)}
-            placeholder="Your website or portfolio"
+            label="Phone"
+            name="phone"
+            placeholder="Your phone number"
+            value={formData.phone}
+            onChange={handleChange}
           />
-          <Button
-            variant="primary"
-            full
-            onClick={handleFinalSubmit}
-            disabled={loading}
-          >
-            {loading ? "Submitting..." : "Finish Setup"}
-          </Button>
-        </div>
+        </>
       )}
 
-      {/* Error handling */}
-      {error && <div className="text-red-500 mt-4">{error}</div>}
+      {/* Step 3: Location & Website */}
+      {step === 3 && (
+        <>
+          <Input
+            label="Location"
+            name="location"
+            placeholder="City, Country"
+            value={formData.location}
+            onChange={handleChange}
+          />
+          <Input
+            label="Website"
+            name="website"
+            placeholder="https://example.com"
+            value={formData.website}
+            onChange={handleChange}
+          />
+        </>
+      )}
+
+      {/* Navigation Buttons */}
+      <div className="flex justify-between mt-4">
+        {step > 1 && (
+          <Button type="button" onClick={handlePrev}>
+            Back
+          </Button>
+        )}
+
+        {step < 3 && (
+          <Button
+            type="button"
+            onClick={handleNext}
+            disabled={checkingUsername}
+          >
+            {checkingUsername ? (
+              <div className="flex items-center justify-center gap-2">
+                <Spinner size={5} /> Checking...
+              </div>
+            ) : (
+              "Next"
+            )}
+          </Button>
+        )}
+
+        {step === 3 && (
+          <Button type="button" full onClick={handleSubmit} disabled={loading}>
+            {loading ? (
+              <div className="flex items-center justify-center gap-2">
+                <Spinner size={5} /> Saving...
+              </div>
+            ) : (
+              "Complete Profile"
+            )}
+          </Button>
+        )}
+      </div>
+
+      {/* Step Indicator */}
+      <p className="text-center text-sm text-gray-500 mt-2">Step {step} of 3</p>
     </div>
   );
 };

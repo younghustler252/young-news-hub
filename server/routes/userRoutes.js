@@ -11,7 +11,7 @@ const {
 } = require('../controllers/userController');
 
 const { protect } = require('../middleware/authMiddleware');
-const { validateUserProfileUpdate, validateBanAction } = require('../middleware/userValidators');
+const { validateUserProfileUpdate, validateBanAction, validateCompleteProfile } = require('../middleware/userValidators');
 const validateRequest = require('../middleware/validateRequest');
 
 // Get logged-in user
@@ -20,7 +20,7 @@ router.get('/me', protect, getMe);
 // Update user profile
 router.put('/me', protect, validateUserProfileUpdate, validateRequest, updateProfile);
 
-router.post('/complete-profile', protect,  completeProfile);
+router.put('/complete-profile', protect,validateCompleteProfile, validateRequest, completeProfile);
 
 
 router.get('/check-username', checkUsername)

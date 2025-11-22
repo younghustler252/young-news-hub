@@ -30,7 +30,7 @@ connectDB();
 app.use(logger);
 app.use(express.json());
 app.use(cors({
-    origin: 'https://everyvoice.netlify.app',
+    origin: ['https://everyvoice.netlify.app', 'http://localhost:5173'],
     credentials: false
 }));
 app.use(helmet());

@@ -19,6 +19,7 @@ export const ROUTE = {
   editPost: (id = ':id') => `/edit/${id}`,
 
   // 🙍‍♂️ Profile
+  completeProfile: '/complete-profile',
   userProfile: (username = ':username') => `/profile/${username}`,
   myProfile: '/me',
   messageList: '/messages',                        // messages list page

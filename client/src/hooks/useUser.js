@@ -7,6 +7,7 @@ import {
   toggleFollow as toggleFollowAPI,
   banUser as banUserAPI,
   getUserByUsername as fetchUserByUsername,
+  checkUsernameAvailability 
 } from '../service/userService';
 import toast from 'react-hot-toast';
 
@@ -44,7 +45,7 @@ export const useCompleteProfile = () => {
     setError('');
     try {
       const data = await completeProfileAPI(userData);
-      toast.success('Profile completed!');
+      toast.success(data.message || 'Profile completed!');
       return data;
     } catch (err) {
       setError(err.message || 'Profile completion failed');
@@ -55,8 +56,9 @@ export const useCompleteProfile = () => {
     }
   };
 
-  return { completeProfile, loading, error };
+  return { completeProfile, loading, error }; // ✅ must return!
 };
+
 
 export const useUpdateProfile = () => {
   const [loading, setLoading] = useState(false);
@@ -144,4 +146,14 @@ export const useUserByUsername = (username) => {
   }, [loadUser]);
 
   return { user, loading, error, reload: loadUser };
+};
+
+export const useCheckUsername = () => {
+  const checkUsername = async (username) => {
+    if (!username) throw new Error("Username is required");
+    const data = await checkUsernameAvailability(username);
+    return data; // { available: true/false }
+  };
+
+  return { checkUsername };
 };

@@ -18,10 +18,11 @@ export const getCurrentUser = async () => {
 //  */
 export const completeProfile = async (userData) => {
 	try {
-		const response = await API.post("/users/complete-profile", userData);
-		// Save token after profile completion
+		const response = await API.put("/users/complete-profile", userData);
+		if (response.data?.token) {
 		localStorage.setItem("token", response.data.token);
-		return response.data; // { user, token }
+		}
+		return response.data; // { user, message, token? }
 	} catch (error) {
 		throw new Error(handleError(error));
 	}
@@ -75,3 +76,11 @@ export const getUserByUsername = async (username) => {
 	}
 };
 
+export const checkUsernameAvailability = async (username) => {
+	try {
+		const response = await API.get(`/users/check-username?username=${encodeURIComponent(username)}`);
+		return response.data; // { available: true/false }
+	} catch (error) {
+		throw new Error(handleError(error));
+	}
+};

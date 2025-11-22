@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
-import FormWrapper from "../../components/ui/FormWrapper";
 import Input from "../../components/ui/Input";
+import PasswordInput from "../../components/ui/PasswordInput"; // reusable password input
 import Button from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/Loader";
 import Alert from "../../components/ui/Alert";
@@ -11,16 +11,22 @@ import { ROUTE } from "../../routes/route";
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isLoggedIn, login, loading, error, user } = useAuth();
   const [formData, setFormData] = useState({ identifier: "", password: "" });
   const [formError, setFormError] = useState("");
 
-  // Redirect if already logged in
+  // Redirect after login if already logged in and verified
   useEffect(() => {
     if (isLoggedIn && user) {
-      // 🔐 Redirect admin to dashboard, others to home
-      if (user.role === "admin") navigate(ROUTE.admin);
-      else navigate(ROUTE.home);
+      if (!user.isEmailVerified) {
+        // Redirect unverified users to /verify page
+        navigate(ROUTE.verify, {
+          state: { identifier: user.email, method: "email" },
+        });
+      } else {
+        navigate(user.role === "admin" ? ROUTE.admin : ROUTE.home);
+      }
     }
   }, [isLoggedIn, user, navigate]);
 
@@ -33,12 +39,27 @@ const Login = () => {
     setFormError("");
 
     try {
-      const res = await login(formData); // login likely returns user data
+      const res = await login(formData);
 
-      if (res?.user?.role === "admin") navigate(ROUTE.admin);
-      else navigate(ROUTE.home);
+      if (res.user) {
+        if (!res.user.isEmailVerified) {
+          // Redirect unverified users to verify page
+          navigate(ROUTE.verify, {
+            state: { identifier: res.user.email, method: "email" },
+          });
+        } else {
+          navigate(res.user.role === "admin" ? ROUTE.admin : ROUTE.home);
+        }
+      }
     } catch (err) {
-      setFormError(err.message || "Login failed");
+      // Backend can send 403 if account not verified
+      if (err.message?.includes("Account not verified")) {
+        navigate(ROUTE.verify, {
+          state: { identifier: formData.identifier, method: "email" },
+        });
+      } else {
+        setFormError(err.message || "Login failed");
+      }
     }
   };
 
@@ -57,12 +78,12 @@ const Login = () => {
         required
       />
 
-      <Input
+      <PasswordInput
         label="Password"
         name="password"
-        type="password"
         value={formData.password}
         onChange={handleChange}
+        placeholder="Enter your password"
         required
       />
 

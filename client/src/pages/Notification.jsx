@@ -5,6 +5,9 @@ import { useNavigate } from "react-router-dom";
 import { Spinner, FullScreenSpinner } from "../components/ui/Loader";
 import toast from "react-hot-toast";
 
+// Fallback logo
+import fallbackLogo from "../assets/logo.jpg";
+
 const Notifications = () => {
   const navigate = useNavigate();
   const {
@@ -52,6 +55,7 @@ const Notifications = () => {
 
   const handleClickNotification = (notif) => {
     markAsRead(notif._id);
+
     switch (notif.type) {
       case "post":
         navigate(`/post/${notif.post._id}`);
@@ -100,7 +104,7 @@ const Notifications = () => {
           </div>
         </div>
 
-        {/* NOTIFICATIONS LIST */}
+        {/* LIST */}
         {notifications.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 text-center text-gray-500">
             No notifications yet 📭
@@ -109,8 +113,17 @@ const Notifications = () => {
           <AnimatePresence>
             {notifications.map((notif, index) => {
               const isLast = index === notifications.length - 1;
-              const sender = notif.sender || {};
-              const avatarUrl = sender.profileImageUrl;
+
+              const sender = notif.sender || null;
+
+              // If sender missing, use empty string (no "Someone")
+              const senderName = sender?.name || "";
+
+              // Avatar fallback
+              const avatarUrl =
+                sender?.profileImageUrl && sender.profileImageUrl.trim() !== ""
+                  ? sender.profileImageUrl
+                  : fallbackLogo;
 
               return (
                 <motion.div
@@ -124,31 +137,33 @@ const Notifications = () => {
                     notif.isRead ? "" : "border-blue-300 bg-blue-50"
                   }`}
                 >
-                  {/* LEFT: Avatar */}
+                  {/* LEFT */}
                   <div
                     className="flex items-center gap-3 flex-1 cursor-pointer"
                     onClick={() => handleClickNotification(notif)}
                   >
                     <img
                       src={avatarUrl}
-                      alt={sender.name || "User"}
+                      alt={senderName || "Logo"}
                       className="w-10 h-10 rounded-full object-cover border border-gray-200 hover:scale-105 transition-transform duration-200"
+                      onError={(e) => (e.target.src = fallbackLogo)}
                     />
 
                     <div className="flex-1">
                       <p className="text-gray-800 text-sm leading-snug">
-                        <span className="font-semibold">
-                          {sender.name || "Someone"}
-                        </span>{" "}
+                        {senderName && (
+                          <span className="font-semibold">{senderName}</span>
+                        )}{" "}
                         {notif.content}
                       </p>
+
                       <p className="text-xs text-gray-400 mt-1">
                         {new Date(notif.createdAt).toLocaleString()}
                       </p>
                     </div>
                   </div>
 
-                  {/* RIGHT: Delete */}
+                  {/* RIGHT */}
                   <button
                     onClick={() => handleDelete(notif._id)}
                     className="text-xs text-red-500 hover:text-red-700 ml-3"
@@ -161,7 +176,6 @@ const Notifications = () => {
           </AnimatePresence>
         )}
 
-        {/* INFINITE SCROLL LOADER */}
         {isFetchingNextPage && (
           <div className="flex justify-center mt-4">
             <Spinner />

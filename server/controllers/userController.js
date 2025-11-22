@@ -80,68 +80,63 @@ const getUserByUsername = asyncHandler(async (req, res) => {
 })
 
 
-// @desc    Complete user profile (add username, phone, bio)
+/// @desc    Complete user profile (add username, phone, bio, location, website)
 // @route   PUT /api/users/complete-profile
-// @access  Private (user must be logged in/verified)
-// @desc    Complete user profile (add username, phone, bio)
-// @route   PUT /api/users/complete-profile
-// @access  Private (user must be logged in/verified)
+// @access  Private
 const completeProfile = asyncHandler(async (req, res) => {
-	const userId = req.user._id;
-	const { username, bio, phone, accountType, location, website } = req.body;
+  const userId = req.user._id;
+  const { username, bio, phone, location, website } = req.body;
 
-	if (!username) {
-		res.status(400);
-		throw new Error("Username is required");
-	}
+  // Find the user
+  const user = await User.findById(userId);
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
 
-	// Check if username taken
-	const existingUsername = await User.findOne({ username: username.toLowerCase() });
-	if (existingUsername && existingUsername._id.toString() !== userId.toString()) {
-		res.status(400);
-		throw new Error("Username already taken");
-	}
+  // Check if username is taken by someone else
+  const existingUsername = await User.findOne({ username: username.toLowerCase() });
+  if (existingUsername && existingUsername._id.toString() !== userId.toString()) {
+    res.status(400);
+    throw new Error("Username already taken");
+  }
 
-	const user = await User.findById(userId);
-	if (!user) {
-		res.status(404);
-		throw new Error("User not found");
-	}
+  // Update fields
+  user.username = username.toLowerCase().trim();
+  if (bio) user.bio = bio.trim();
+  if (phone && phone !== user.phone) {
+    user.phone = phone;
+    user.isPhoneVerified = false; // reset verification if phone changed
+  }
+  if (location) user.location = location.trim();
+  if (website) user.website = website.trim();
 
-	user.username = username.toLowerCase().trim();
-	if (bio) user.bio = bio;
-	if (phone && phone !== user.phone) {
-		user.phone = phone;
-		user.isPhoneVerified = false;
-	}
-	if (accountType) user.accountType = accountType;  // New addition for accountType
-	if (location) user.location = location;
-	if (website) user.website = website;
+  await user.save();
 
-	await user.save();
+  // Send system notification
+  await sendNotification({
+    recipient: user._id,
+    type: 'system',
+    content: `Welcome, ${user.name || user.username}! Your profile is now complete.`,
+    metadata: { action: 'profile_complete' },
+  });
 
-	// 🔔 Send system notification
-	await sendNotification({
-		recipient: user._id,
-		type: 'system',
-		content: `Welcome, ${user.name || user.username}! Your profile is now complete.`,
-		metadata: { action: 'profile_complete' },
-	});
-
-	res.status(200).json({
-		message: "Profile completed successfully",
-		user: {
-		_id: user._id,
-		name: user.name,
-		username: user.username,
-		email: user.email,
-		bio: user.bio,
-		phone: user.phone,
-		accountType: user.accountType,  // Include account type in the response
-		isPhoneVerified: user.isPhoneVerified || false,
-		}
-	});
+  res.status(200).json({
+    message: "Profile completed successfully",
+    user: {
+      _id: user._id,
+      name: user.name,
+      username: user.username,
+      email: user.email,
+      bio: user.bio,
+      phone: user.phone,
+      isPhoneVerified: user.isPhoneVerified || false,
+      location: user.location,
+      website: user.website,
+    }
+  });
 });
+
 
 
 

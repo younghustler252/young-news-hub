@@ -1,71 +1,93 @@
-const User = require('../models/User'); 
+const User = require('../models/User');
 const asyncHandler = require('express-async-handler');
 const generateToken = require('../utils/generateToken');
 const sendEmailCode = require('../utils/sendEmailCode');
 const sendSmsCode = require('../utils/sendSmsCode');
-const generateCode = require('../utils/generateCode')
+const generateCode = require('../utils/generateCode');
 const { saveCode, verifyCode } = require('../utils/codeStore');
+const rateLimit = require('express-rate-limit');
 
+// ======================= RATE LIMITERS =========================
+const registerLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5, // max 5 registrations per IP per hour
+    message: "Too many accounts created from this IP, please try again later."
+});
 
-// @desc    Register new user (only email, name, password)
-// @route   POST /api/auth/register
-// @access  Public
+const resendLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5, // max 5 resends per identifier per hour
+    keyGenerator: (req) => req.body.identifier || '', // track by identifier
+    message: "Too many resend requests, please try again later."
+});
+
+// ======================= HELPER =========================
+const normalizeIdentifier = (identifier, method = 'email') => {
+    if (!identifier) return '';
+    return method === 'email' ? identifier.trim().toLowerCase() : identifier.trim();
+};
+
+// ======================= REGISTER USER =========================
 const registerUser = asyncHandler(async (req, res) => {
-    const { name, email, password, method = 'email' } = req.body;
+    let { name, email, password } = req.body;
 
-    // Input validation
+    name = name?.trim();
+    email = normalizeIdentifier(email, 'email');
+
     if (!name || !email || !password) {
         res.status(400);
         throw new Error("Name, email, and password are required");
     }
+    if (password.length < 6) {
+        res.status(400);
+        throw new Error("Password must be at least 6 characters");
+    }
 
-    // Check if user already exists by email
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
+    if (await User.findOne({ email })) {
         res.status(409);
         throw new Error("User with this email already exists");
     }
 
-    // Create user with minimal info, phone empty for now
     const user = new User({ name, email, password });
     await user.save();
 
-    // Generate verification code for email
     const code = generateCode();
 
     try {
         await sendEmailCode(email, code);
-        saveCode(email, code);
-    } catch (error) {
-        console.error("Failed to send verification code:", error.message);
+        await saveCode(email, code);
+    } catch (err) {
+        console.error("Failed to send verification code:", err);
         return res.status(201).json({
-            message: "User registered, but failed to send verification code. Please try again.",
+            message: "User registered, but verification code failed. Try resending.",
             userId: user._id,
             verificationPending: true
         });
     }
 
     res.status(201).json({
-        message: `Verification code sent via email`,
+        message: "Verification code sent via email",
         userId: user._id,
         verificationPending: true
     });
 });
 
-
-// @desc    Login user
-// @route   POST /api/auth/login
-// @access  Public
+// ======================= LOGIN USER =========================
 const loginUser = asyncHandler(async (req, res) => {
-    const { identifier, password } = req.body;
+    let { identifier, password } = req.body;
+    identifier = identifier?.trim();
 
     if (!identifier || !password) {
         res.status(400);
-        throw new Error("Email or phone and password are required");
+        throw new Error("Email, username, or phone and password are required");
     }
 
     const user = await User.findOne({
-        $or: [{ email: identifier }, { phone: identifier }]
+        $or: [
+            { email: identifier.toLowerCase() },
+            { username: identifier.toLowerCase() },
+            { phone: identifier }
+        ]
     }).select("+password");
 
     if (!user || !(await user.comparePassword(password))) {
@@ -73,11 +95,10 @@ const loginUser = asyncHandler(async (req, res) => {
         throw new Error("Invalid credentials");
     }
 
-    // Optional verification check (uncomment if needed)
-    // if (!user.isVerified) {
-    //     res.status(403);
-    //     throw new Error("Account not verified. Please verify first.");
-    // }
+    if (!user.isEmailVerified) {
+        res.status(403);
+        throw new Error("Account not verified. Please verify your email or phone.");
+    }
 
     res.status(200).json({
         status: "success",
@@ -85,52 +106,50 @@ const loginUser = asyncHandler(async (req, res) => {
         user: {
             _id: user._id,
             name: user.name,
+            username: user.username,
             email: user.email,
+            phone: user.phone,
             role: user.role,
-            isVerified: user.isVerified,
+            isEmailVerified: user.isEmailVerified,
+            isPhoneVerified: user.isPhoneVerified || false
         },
-        token: generateToken(user._id),
+        token: generateToken(user._id)
     });
 });
 
-
-
-
-// @desc    Verify email or phone code
-// @route   POST /api/auth/verify
-// @access  Public
+// ======================= VERIFY USER =========================
 const verifyUser = asyncHandler(async (req, res) => {
-    const { identifier, code, type = 'email' } = req.body; 
-    // type can be 'email' or 'phone'
+    const { identifier, code, type = 'email' } = req.body;
+    const normalizedId = normalizeIdentifier(identifier, type);
 
-    if (!identifier || !code) {
+    if (!normalizedId || !code) {
         res.status(400);
         throw new Error("Identifier and code are required");
     }
-    
-    const query = type === 'phone' ? { phone: identifier } : { email: identifier };
+
+    const query = type === 'phone' ? { phone: normalizedId } : { email: normalizedId };
     const user = await User.findOne(query);
     if (!user) {
         res.status(404);
         throw new Error("User not found");
     }
 
-    const isValid = verifyCode(identifier, code);
+    const isValid = verifyCode(normalizedId, code);
     if (!isValid) {
         res.status(400);
         throw new Error("Invalid or expired code");
     }
 
     if (type === 'email') {
-        user.isVerified = true;
+        user.isEmailVerified = true;
         user.verifiedAt = new Date();
-    } else if (type === 'phone') {
+    } else {
         user.isPhoneVerified = true;
         user.phoneVerifiedAt = new Date();
     }
 
     await user.save();
-  
+
     res.status(200).json({
         message: `${type === 'email' ? 'Email' : 'Phone'} verified successfully`,
         token: generateToken(user._id),
@@ -140,40 +159,33 @@ const verifyUser = asyncHandler(async (req, res) => {
             email: user.email,
             phone: user.phone,
             role: user.role,
-            isVerified: user.isVerified,
-            isPhoneVerified: user.isPhoneVerified || false,
+            isEmailVerified: user.isEmailVerified,
+            isPhoneVerified: user.isPhoneVerified || false
         }
-    }); 
+    });
 });
 
-
-// @desc    Resend verification code (email or phone)
-// @route   POST /api/auth/resend-code
-// @access  Public
+// ======================= RESEND VERIFICATION CODE =========================
 const resendCode = asyncHandler(async (req, res) => {
     const { identifier, method = 'email' } = req.body;
+    const normalizedId = normalizeIdentifier(identifier, method);
 
-    if (!identifier) {
+    if (!normalizedId) {
         res.status(400);
         throw new Error("Identifier is required");
     }
 
-    const query = method === 'sms' ? { phone: identifier } : { email: identifier };
+    const query = method === 'sms' ? { phone: normalizedId } : { email: normalizedId };
     const user = await User.findOne(query);
-
     if (!user) {
         res.status(404);
         throw new Error("User not found");
     }
 
-    // Check verification status for chosen method
-    if (method === 'email' && user.isVerified) {
+    if ((method === 'email' && user.isEmailVerified) || 
+        (method === 'sms' && user.isPhoneVerified)) {
         res.status(400);
-        throw new Error("Email is already verified");
-    }
-    if (method === 'sms' && user.isPhoneVerified) {
-        res.status(400);
-        throw new Error("Phone number is already verified");
+        throw new Error(`${method === 'email' ? 'Email' : 'Phone'} is already verified`);
     }
 
     const code = generateCode();
@@ -181,10 +193,10 @@ const resendCode = asyncHandler(async (req, res) => {
     try {
         if (method === 'sms') {
             await sendSmsCode(user.phone, code);
-            saveCode(user.phone, code);
+            await saveCode(user.phone, code);
         } else {
             await sendEmailCode(user.email, code);
-            saveCode(user.email, code);
+            await saveCode(user.email, code);
         }
 
         res.status(200).json({
@@ -192,32 +204,29 @@ const resendCode = asyncHandler(async (req, res) => {
             userId: user._id
         });
     } catch (err) {
-        console.error("Failed to resend code:", err.message);
+        console.error("Failed to resend code:", err);
         res.status(500);
         throw new Error("Failed to send verification code. Please try again.");
     }
 });
 
-
-// @desc    Check username availability
-// @route   GET /api/auth/check-username
-// @access  Public
+// ======================= CHECK USERNAME =========================
 const checkUsername = asyncHandler(async (req, res) => {
-    const { username } = req.query;
+    const username = req.query.username?.trim().toLowerCase();
     if (!username) {
         res.status(400);
         throw new Error("Username query param required");
     }
-    const userExists = await User.findOne({ username: username.toLowerCase() });
+    const userExists = await User.findOne({ username });
     res.status(200).json({ available: !userExists });
 });
 
-
-
-module.exports = { 
-    registerUser, 
-    loginUser, 
-    verifyUser, 
-    resendCode, 
-    checkUsername, 
+module.exports = {
+    registerUser,
+    loginUser,
+    verifyUser,
+    resendCode,
+    checkUsername,
+    registerLimiter,
+    resendLimiter
 };

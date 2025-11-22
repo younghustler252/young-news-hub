@@ -19,6 +19,7 @@ import MyProfile from "../pages/MyProfile";
 import UserProfile from "../pages/UserProfile";
 import Notification from "../pages/Notification";
 import Messages from "../pages/Messages";
+import NotFound from "../pages/NotFound";
 
 // 🧑‍💼 Admin pages
 import Dashboard from "../pages/admin/Dashboard";
@@ -34,6 +35,7 @@ const AppRouter = () => {
         <Route path={ROUTE.home} element={<Home />} />
         <Route path={ROUTE.userProfile()} element={<UserProfile />} />
         <Route path={ROUTE.search} element={<Search />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
 
       {/* 🔐 Auth routes without header */}
@@ -41,7 +43,16 @@ const AppRouter = () => {
         <Route path={ROUTE.login} element={<Login />} />
         <Route path={ROUTE.register} element={<Register />} />
         <Route path={ROUTE.verify} element={<Verify />} />
-        <Route path="/auth/complete-profile" element={<CompleteProfile />} />
+      </Route>
+
+      <Route
+        element={
+          <ProtectedRoute requireIncompleteProfile>
+            <AuthLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path={ROUTE.completeProfile} element={<CompleteProfile />} />
       </Route>
 
       {/* 🛡️ Protected user routes (header visible) */}
