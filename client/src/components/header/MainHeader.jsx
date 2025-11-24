@@ -118,7 +118,7 @@ const MainHeader = () => {
           <FiMessageSquare className="text-xl" />
           Msg
         </Link>
-        {isLoggedIn && (
+        {isLoggedIn ? (
           <Avatar
             src={user?.avatar}
             size="8"
@@ -126,6 +126,13 @@ const MainHeader = () => {
             currentUserId={user?._id} // pass current user ID
             clickable={true} // optional, default true
           />
+        ) : (
+          <Link
+            to={ROUTE.login}
+            className="text-sm text-gray-700 hover:underline"
+          >
+            Login
+          </Link>
         )}
       </div>
     </>

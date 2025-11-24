@@ -78,7 +78,6 @@ const deleteTag = asyncHandler(async (req, res) => {
 // Get popular/trending tags
 // ========================
 const getPopularTags = asyncHandler(async (req, res) => {
-     console.log("🔥 GET /api/tags/popular hit");
 
   const limit = parseInt(req.query.limit) || 10;
 
@@ -86,7 +85,6 @@ const getPopularTags = asyncHandler(async (req, res) => {
     .sort({ postCount: -1 })
     .limit(limit);
 
-  console.log("📊 Found tags:", tags);
   res.json(tags);
 });
 

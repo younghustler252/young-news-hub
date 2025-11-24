@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import Logo from "../assets/logo.jpg";
 import { motion } from "framer-motion";
 import Button from "../components/ui/Button"; // your reusable button
+import { ROUTE } from "../routes/route";
 
 const NotFound = () => {
   return (
@@ -56,11 +57,11 @@ const NotFound = () => {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
         >
-          <Link to="/">
+          <Link to={ROUTE.home}>
             <Button full>Go Home</Button>
           </Link>
 
-          <Link to="/login">
+          <Link to={ROUTE.login}>
             <Button full variant="outline">
               Login
             </Button>
