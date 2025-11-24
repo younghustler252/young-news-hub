@@ -3,6 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import AdminSidebar from "../admin/AdminSidebar";
 import { FiMenu } from "react-icons/fi";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 const AdminLayout = () => {
   const { user } = useAuth();
@@ -31,11 +32,20 @@ const AdminLayout = () => {
             </h1>
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-600">{user?.name}</span>
+
               <img
                 src={user?.avatar || "/default-avatar.png"}
                 alt="Admin avatar"
                 className="w-8 h-8 rounded-full object-cover"
               />
+
+              {/* ⭐ Back to the main user site */}
+              <Link
+                to="/"
+                className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
+              >
+                Go to Site
+              </Link>
             </div>
           </div>
         </header>

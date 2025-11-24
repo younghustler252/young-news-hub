@@ -1,9 +1,9 @@
 // src/pages/MyProfile.jsx
 import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-
 import { LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+
 import { getCurrentUser, updateProfile } from "../service/userService";
 import { uploadMedia } from "../service/mediaService";
 import { getMyPosts } from "../service/postService";
@@ -13,6 +13,7 @@ import Alert from "../components/ui/Alert";
 import Tabs from "../components/ui/Tabs";
 import ProfileHeader from "../components/ui/ProfileHeader";
 import UserStats from "../components/ui/UserStats";
+import Modal from "../components/ui/Modal";
 
 import OverviewTab from "../components/profile/OverviewTab";
 import PostsTab from "../components/profile/PostsTab";
@@ -30,19 +31,25 @@ const tabs = [
 
 const MyProfile = () => {
   const { user: authUser, loading: authLoading, logout } = useAuth();
+
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("Overview");
   const [posts, setPosts] = useState([]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
   const fileInputRef = useRef();
 
+  // Fetch profile + posts
   useEffect(() => {
     const fetchData = async () => {
       try {
         const data = await getCurrentUser();
         setProfile(data);
+
         const postsData = await getMyPosts(1, 10);
         setPosts(postsData.posts || []);
       } catch (err) {
@@ -51,10 +58,12 @@ const MyProfile = () => {
         setLoading(false);
       }
     };
+
     if (authUser) fetchData();
   }, [authUser]);
 
   if (authLoading || loading) return <FullScreenSpinner />;
+
   if (!profile)
     return (
       <div className="text-center mt-10 text-gray-600 font-medium">
@@ -62,51 +71,67 @@ const MyProfile = () => {
       </div>
     );
 
+  // Avatar Update
   const handleAvatarChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
     try {
       const formData = new FormData();
       formData.append("file", file);
+
       const uploaded = await uploadMedia(formData);
+
       const updated = await updateProfile({
         profileImageUrl: uploaded.media.url,
       });
+
       setProfile((p) => ({
         ...p,
         avatar: updated.user?.avatar || uploaded.media.url,
       }));
+
       setSuccess("Avatar updated successfully!");
     } catch {
       setError("Failed to update avatar.");
     }
   };
 
+  // Field Update
   const handleFieldUpdate = async (field, value) => {
     try {
       const payload = { [field]: value };
       const updated = await updateProfile(payload);
-      setProfile((p) => ({ ...p, [field]: updated[field] ?? value }));
+
+      setProfile((p) => ({
+        ...p,
+        [field]: updated[field] ?? value,
+      }));
+
       setSuccess(`${field} updated successfully!`);
     } catch {
       setError(`Failed to update ${field}.`);
     }
   };
 
+  // Preferences
   const handleTogglePreference = async (key, value) => {
     try {
       const newPrefs = { ...(profile.preferences || {}), [key]: value };
       const updated = await updateProfile({ preferences: newPrefs });
+
       setProfile((p) => ({
         ...p,
         preferences: updated.preferences || newPrefs,
       }));
+
       setSuccess("Preferences updated.");
     } catch {
       setError("Failed to update preferences.");
     }
   };
 
+  // Post Delete
   const handleDeletePost = (id) => {
     setPosts((prev) => prev.filter((post) => post._id !== id));
     setSuccess("Post deleted successfully!");
@@ -114,24 +139,12 @@ const MyProfile = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
-      {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-lg border-b border-gray-200 shadow-sm">
-        <div className="max-w-6xl mx-auto flex justify-between items-center px-4 py-3">
-          <h1 className="text-xl font-semibold text-gray-800">My Dashboard</h1>
-          <button
-            onClick={logout}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-md transition-all"
-          >
-            <LogOut size={16} /> Logout
-          </button>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-3 sm:px-4 py-8 space-y-6">
         {error && (
           <Alert type="error" message={error} onClose={() => setError(null)} />
         )}
+
         {success && (
           <Alert
             type="success"
@@ -141,7 +154,7 @@ const MyProfile = () => {
         )}
 
         {/* Profile Header */}
-        <div className="bg-white/70 backdrop-blur-md shadow-lg rounded-2xl p-6">
+        <div className="bg-white/70 backdrop-blur-md shadow-lg rounded-2xl p-6 flex justify-between items-start">
           <ProfileHeader
             name={profile.name}
             username={profile.username}
@@ -151,13 +164,23 @@ const MyProfile = () => {
             fileInputRef={fileInputRef}
             onAvatarChange={handleAvatarChange}
           />
-          <div className="mt-4">
-            <UserStats
-              postsCount={profile.postsCount || 0}
-              followersCount={profile.followers?.length || 0}
-              followingCount={profile.following?.length || 0}
-            />
-          </div>
+
+          {/* Logout Button */}
+          <button
+            onClick={() => setShowLogoutModal(true)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-md transition-all"
+          >
+            <LogOut size={16} /> Logout
+          </button>
+        </div>
+
+        {/* User Stats */}
+        <div>
+          <UserStats
+            postsCount={profile.postsCount || 0}
+            followersCount={profile.followers?.length || 0}
+            followingCount={profile.following?.length || 0}
+          />
         </div>
 
         {/* Tabs */}
@@ -220,7 +243,7 @@ const MyProfile = () => {
                 <AccountSettingsTab
                   profile={profile}
                   onTogglePreference={handleTogglePreference}
-                  logout={logout}
+                  logout={() => setShowLogoutModal(true)}
                 />
               </motion.div>
             )}
@@ -242,6 +265,31 @@ const MyProfile = () => {
           </AnimatePresence>
         </section>
       </main>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        title="Confirm Logout"
+      >
+        <p className="text-gray-700 mb-4">Are you sure you want to logout?</p>
+
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={() => setShowLogoutModal(false)}
+            className="px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-700"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={logout}
+            className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white"
+          >
+            Logout
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 };
