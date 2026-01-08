@@ -7,7 +7,7 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     port: 587,
-    secure: true,
+    secure: false,
     auth: {
         user: process.env.NM_EMAIL,
         pass: process.env.NM_PASSWORD,
