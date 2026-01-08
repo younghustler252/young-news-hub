@@ -1,49 +1,64 @@
-const sgMail = require('@sendgrid/mail');
-const nodemailer = require('nodemailer');
+// sendEmailCode.js
+const nodemailer = require("nodemailer");
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-
-// Configure Nodemailer transport (example using Gmail, adjust as needed)
+// Create Nodemailer transporter using environment variables
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    port: 587,
-    secure: false,
+    service: process.env.NM_SERVICE,               // e.g., 'gmail'
     auth: {
-        user: process.env.NM_EMAIL,
-        pass: process.env.NM_PASSWORD,
+        user: process.env.NM_EMAIL,               // your email
+        pass: process.env.NM_PASSWORD,           // Gmail App Password
+    },
+    port: Number(process.env.NM_PORT) || 587,     // TLS port
+    secure: process.env.NM_SECURE === "true",     // false for TLS 587, true for SSL 465
+    tls: {
+        rejectUnauthorized: false,               // avoids TLS handshake errors on cloud hosts
     },
 });
 
+// Verify SMTP connection on startup and log results
+transporter.verify((err, success) => {
+    if (err) {
+        console.error("SMTP connection verification failed:", err);
+    } else {
+        console.log("SMTP connection verified successfully!");
+    }
+});
+
+/**
+ * Sends a verification code email
+ * @param {string} toEmail - Recipient email address
+ * @param {string} code - Verification code
+ */
 const sendEmailCode = async (toEmail, code) => {
-    const msg = {
+    const mailOptions = {
+        from: process.env.NM_EMAIL,
         to: toEmail,
-        from: process.env.SENDGRID_FROM_EMAIL,
-        subject: 'Your Verification Code',
+        subject: "Your Verification Code",
         text: `Your verification code is: ${code}`,
         html: `<p>Your verification code is: <strong>${code}</strong></p>`,
     };
 
     try {
-        // Try sending with SendGrid first
-        await sgMail.send(msg);
-        console.log('Email sent via SendGrid');
-    } catch (sendGridError) {
-        console.warn('SendGrid failed, falling back to Nodemailer:', sendGridError.message);
+        const info = await transporter.sendMail(mailOptions);
 
-        // Fallback to Nodemailer
-        try {
-            await transporter.sendMail({
-                from: process.env.NM_EMAIL,
-                to: toEmail,
-                subject: msg.subject,
-                text: msg.text,
-                html: msg.html,
-            });
-            console.log('Email sent via Nodemailer');
-        } catch (nodemailerError) {
-            console.error('Nodemailer also failed:', nodemailerError.message);
-            throw nodemailerError; // rethrow if you want upstream handling
+        console.log("Email sent successfully!");
+        console.log("Message ID:", info.messageId);
+        console.log("Response:", info.response);
+
+        return info;
+    } catch (error) {
+        console.error("Failed to send email:", error);
+
+        // Detailed error logging for troubleshooting
+        if (error.code === "ETIMEDOUT") {
+            console.error("Connection timed out: the SMTP server may be blocked by Render.");
+        } else if (error.code === "EAUTH") {
+            console.error("Authentication failed: check NM_EMAIL and NM_PASSWORD.");
+        } else if (error.code === "ECONNECTION") {
+            console.error("Cannot connect to SMTP server: check NM_SERVICE, NM_PORT, and network/firewall.");
         }
+
+        throw error; // rethrow for upstream handling
     }
 };
 
