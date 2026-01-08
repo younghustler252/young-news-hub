@@ -1,64 +1,42 @@
-// sendEmailCode.js
 const nodemailer = require("nodemailer");
 
-// Create Nodemailer transporter using environment variables
 const transporter = nodemailer.createTransport({
-    service: process.env.NM_SERVICE,               // e.g., 'gmail'
+    host: process.env.NM_HOST,
+    port: Number(process.env.NM_PORT),
+    secure: process.env.NM_SECURE === "true",
     auth: {
-        user: process.env.NM_EMAIL,               // your email
-        pass: process.env.NM_PASSWORD,           // Gmail App Password
+        user: process.env.NM_EMAIL,
+        pass: process.env.NM_PASSWORD,
     },
-    port: Number(process.env.NM_PORT) || 587,     // TLS port
-    secure: process.env.NM_SECURE === "true",     // false for TLS 587, true for SSL 465
     tls: {
-        rejectUnauthorized: false,               // avoids TLS handshake errors on cloud hosts
+        rejectUnauthorized: false,
     },
 });
 
-// Verify SMTP connection on startup and log results
-transporter.verify((err, success) => {
+// Verify connection at startup
+transporter.verify((err) => {
     if (err) {
-        console.error("SMTP connection verification failed:", err);
+        console.error("SMTP VERIFY FAILED ❌", err);
     } else {
-        console.log("SMTP connection verified successfully!");
+        console.log("SMTP READY ✅");
     }
 });
 
-/**
- * Sends a verification code email
- * @param {string} toEmail - Recipient email address
- * @param {string} code - Verification code
- */
 const sendEmailCode = async (toEmail, code) => {
-    const mailOptions = {
-        from: process.env.NM_EMAIL,
-        to: toEmail,
-        subject: "Your Verification Code",
-        text: `Your verification code is: ${code}`,
-        html: `<p>Your verification code is: <strong>${code}</strong></p>`,
-    };
-
     try {
-        const info = await transporter.sendMail(mailOptions);
+        const info = await transporter.sendMail({
+            from: `"EveryVoice" <${process.env.NM_EMAIL}>`,
+            to: toEmail,
+            subject: "Your Verification Code",
+            text: `Your verification code is: ${code}`,
+            html: `<p>Your verification code is <b>${code}</b></p>`,
+        });
 
-        console.log("Email sent successfully!");
-        console.log("Message ID:", info.messageId);
-        console.log("Response:", info.response);
-
+        console.log("EMAIL SENT ✅", info.messageId);
         return info;
-    } catch (error) {
-        console.error("Failed to send email:", error);
-
-        // Detailed error logging for troubleshooting
-        if (error.code === "ETIMEDOUT") {
-            console.error("Connection timed out: the SMTP server may be blocked by Render.");
-        } else if (error.code === "EAUTH") {
-            console.error("Authentication failed: check NM_EMAIL and NM_PASSWORD.");
-        } else if (error.code === "ECONNECTION") {
-            console.error("Cannot connect to SMTP server: check NM_SERVICE, NM_PORT, and network/firewall.");
-        }
-
-        throw error; // rethrow for upstream handling
+    } catch (err) {
+        console.error("EMAIL SEND FAILED ❌", err);
+        throw err;
     }
 };
 
