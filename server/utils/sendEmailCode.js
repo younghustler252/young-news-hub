@@ -50,7 +50,7 @@ const sendEmailCode = async (toEmail, code) => {
 			},
 			body: JSON.stringify({
 				sender: {
-					email: "everyvoice@gmail.com", // MUST be verified in Brevo
+					email: "everyvoice247@gmail.com", // MUST be verified in Brevo
 					name: "EveryVoice",
 				},
 				to: [{ email: toEmail }],
