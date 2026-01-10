@@ -27,23 +27,23 @@ exports.validateCompleteProfile = [
         .matches(/^[a-z0-9_]+$/i)
         .withMessage('Username can only contain letters, numbers, and underscores'),
     body('bio')
-        .optional()
+        .optional({ checkFalsy: true })
         .isString()
         .trim()
         .isLength({ max: 500 })
         .withMessage('Bio cannot exceed 500 characters'),
     body('phone')
-        .optional()
+        .optional({ checkFalsy: true })
         .trim()
         .matches(/^\+?[0-9]{7,15}$/)
         .withMessage('Invalid phone number format'),
     body('location')
-        .optional()
+        .optional({ checkFalsy: true })
         .isString()
         .trim()
         .isLength({ max: 100 }),
     body('website')
-        .optional()
+        .optional({ checkFalsy: true })
         .isURL({ require_protocol: true })
         .withMessage('Website must be a valid URL with http/https'),
 ];

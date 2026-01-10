@@ -5,107 +5,118 @@ import Button from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/Loader";
 import Alert from "../../components/ui/Alert";
 import { ROUTE } from "../../routes/route";
+import { useAuth } from "../../context/AuthContext";
 
-const RESEND_COOLDOWN = 60; // seconds
+const RESEND_COOLDOWN = 60;
 
 const Verify = () => {
-  const { state } = useLocation();
-  const navigate = useNavigate();
-  const [code, setCode] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [resendLoading, setResendLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
-  const [cooldown, setCooldown] = useState(0);
+	const { state } = useLocation();
+	const navigate = useNavigate();
+	const { user } = useAuth();
 
-  const identifier = state?.identifier;
-  const method = state?.method || "email";
+	const [code, setCode] = useState("");
+	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState(null);
+	const [resendLoading, setResendLoading] = useState(false);
+	const [successMsg, setSuccessMsg] = useState("");
+	const [cooldown, setCooldown] = useState(0);
 
-  useEffect(() => {
-    let timer;
-    if (cooldown > 0) {
-      timer = setInterval(() => setCooldown((prev) => prev - 1), 1000);
-    }
-    return () => clearInterval(timer);
-  }, [cooldown]);
+	const identifier = state?.identifier || user?.email;
+	const method = state?.method || "email";
 
-  const handleVerify = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setSuccessMsg("");
+	// Redirect to login if identifier is missing
+	useEffect(() => {
+		if (!identifier) {
+			navigate(ROUTE.login);
+		}
+	}, [identifier, navigate]);
 
-    try {
-      const user = await verifyUser(identifier, code, method);
+	// Resend cooldown timer
+	useEffect(() => {
+		let timer;
+		if (cooldown > 0) {
+			timer = setInterval(() => setCooldown((prev) => prev - 1), 1000);
+		}
+		return () => clearInterval(timer);
+	}, [cooldown]);
 
-      if (!user.username || !user.bio) {
-        navigate(ROUTE.completeProfile, { state: { userId: user._id } });
-      } else {
-        navigate(ROUTE.home);
-      }
-    } catch (err) {
-      setError(err.message || "Verification failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+	const handleVerify = async (e) => {
+		e.preventDefault();
+		setLoading(true);
+		setError(null);
+		setSuccessMsg("");
 
-  const handleResend = async () => {
-    setResendLoading(true);
-    setError(null);
-    setSuccessMsg("");
+		try {
+			const verifiedUser = await verifyUser(identifier, code, method);
 
-    try {
-      await resendCode(identifier, method);
-      setSuccessMsg("Verification code resent successfully!");
-      setCooldown(RESEND_COOLDOWN); // start cooldown
-    } catch (err) {
-      setError(err.message || "Failed to resend code");
-    } finally {
-      setResendLoading(false);
-    }
-  };
+			if (!verifiedUser.username || !verifiedUser.bio) {
+				navigate(ROUTE.completeProfile, { state: { userId: verifiedUser._id } });
+			} else {
+				navigate(ROUTE.home);
+			}
+		} catch (err) {
+			setError(err.message || "Verification failed");
+		} finally {
+			setLoading(false);
+		}
+	};
 
-  return (
-    <form onSubmit={handleVerify} className="space-y-4 max-w-md mx-auto mt-10">
-      <p className="text-center text-gray-600">
-        Enter the 6-digit code sent to <strong>{identifier}</strong>
-      </p>
+	const handleResend = async () => {
+		setResendLoading(true);
+		setError(null);
+		setSuccessMsg("");
 
-      {error && <Alert type="error" message={error} />}
-      {successMsg && <Alert type="success" message={successMsg} />}
+		try {
+			await resendCode(identifier, method);
+			setSuccessMsg("Verification code resent successfully!");
+			setCooldown(RESEND_COOLDOWN);
+		} catch (err) {
+			setError(err.message || "Failed to resend code");
+		} finally {
+			setResendLoading(false);
+		}
+	};
 
-      <input
-        type="text"
-        maxLength={6}
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        className="w-full border border-gray-300 rounded px-3 py-2 text-center tracking-widest text-lg"
-        placeholder="••••••"
-        required
-      />
+	return (
+		<form onSubmit={handleVerify} className="space-y-4 max-w-md mx-auto mt-10">
+			<p className="text-center text-gray-600">
+				Enter the 6-digit code sent to <strong>{identifier}</strong>
+			</p>
 
-      <Button type="submit" full disabled={loading}>
-        {loading ? <Spinner size={5} /> : "Verify Account"}
-      </Button>
+			{error && <Alert type="error" message={error} />}
+			{successMsg && <Alert type="success" message={successMsg} />}
 
-      <p className="text-center text-sm text-gray-500 mt-3">
-        Didn’t get the code?{" "}
-        <button
-          type="button"
-          onClick={handleResend}
-          disabled={resendLoading || cooldown > 0}
-          className="text-green-700 hover:underline font-semibold"
-        >
-          {resendLoading
-            ? "Resending..."
-            : cooldown > 0
-            ? `Resend in ${cooldown}s`
-            : "Resend"}
-        </button>
-      </p>
-    </form>
-  );
+			<input
+				type="text"
+				maxLength={6}
+				value={code}
+				onChange={(e) => setCode(e.target.value)}
+				className="w-full border border-gray-300 rounded px-3 py-2 text-center tracking-widest text-lg"
+				placeholder="••••••"
+				required
+			/>
+
+			<Button type="submit" full disabled={loading}>
+				{loading ? <Spinner size={5} /> : "Verify Account"}
+			</Button>
+
+			<p className="text-center text-sm text-gray-500 mt-3">
+				Didn’t get the code?{" "}
+				<button
+					type="button"
+					onClick={handleResend}
+					disabled={resendLoading || cooldown > 0}
+					className="text-green-700 hover:underline font-semibold"
+				>
+					{resendLoading
+						? "Resending..."
+						: cooldown > 0
+						? `Resend in ${cooldown}s`
+						: "Resend"}
+				</button>
+			</p>
+		</form>
+	);
 };
 
 export default Verify;

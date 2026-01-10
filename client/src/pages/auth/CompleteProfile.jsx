@@ -14,6 +14,7 @@ const CompleteProfile = () => {
   const { checkUsername } = useCheckUsername();
 
   const [step, setStep] = useState(1);
+  const [stepStatus, setStepStatus] = useState({}); // store step success/fail
   const [stepError, setStepError] = useState("");
   const [checkingUsername, setCheckingUsername] = useState(false);
 
@@ -25,52 +26,96 @@ const CompleteProfile = () => {
     website: "",
   });
 
+  // Update field and clear error for step
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    setStepError(""); // clear step error on input
+    setStepError("");
+    setStepStatus({ ...stepStatus, [step]: null });
   };
 
+  // Next step
   const handleNext = async () => {
     setStepError("");
-
+    // Step 1: Validate username
     if (step === 1) {
-      if (!formData.username.trim())
-        return setStepError("Username is required");
+      const username = formData.username.trim();
+      if (!username) return setStepError("Username is required");
 
       setCheckingUsername(true);
       try {
-        const res = await checkUsername(formData.username.trim());
-        if (!res.available) return setStepError("Username is already taken");
+        const res = await checkUsername(username);
+        if (!res.available) {
+          setStepStatus({ ...stepStatus, [step]: false });
+          return setStepError("Username is already taken");
+        }
+        setStepStatus({ ...stepStatus, [step]: true });
       } catch (err) {
+        setStepStatus({ ...stepStatus, [step]: false });
         return setStepError(err.message || "Failed to validate username");
       } finally {
         setCheckingUsername(false);
       }
     }
-
     setStep(step + 1);
   };
 
+  // Previous step
   const handlePrev = () => {
     setStepError("");
     setStep(step - 1);
   };
 
+  // Submit final profile
   const handleSubmit = async () => {
     setStepError("");
     try {
-      const data = await completeProfile(formData);
+      // Prepare payload: only include non-empty optional fields
+      const payload = {
+        username: formData.username.trim(),
+      };
+      if (formData.bio.trim()) payload.bio = formData.bio.trim();
+      if (formData.phone.trim()) payload.phone = formData.phone.trim();
+      if (formData.location.trim()) payload.location = formData.location.trim();
+      if (formData.website.trim()) payload.website = formData.website.trim();
+
+      const data = await completeProfile(payload);
       if (data?.user) {
+        setStepStatus({ ...stepStatus, [step]: true });
         toast.success("Profile completed successfully!");
         navigate(ROUTE.home, { replace: true });
       }
     } catch (err) {
+      setStepStatus({ ...stepStatus, [step]: false });
       setStepError(err.message || "Profile completion failed");
     }
   };
 
+  // Step indicator component
+  const StepIndicator = () => (
+    <div className="flex justify-center items-center gap-2 mt-4">
+      {[1, 2, 3].map((s) => (
+        <div
+          key={s}
+          className={`w-3 h-3 rounded-full ${
+            step === s
+              ? "bg-green-600"
+              : stepStatus[s] === true
+              ? "bg-green-400"
+              : stepStatus[s] === false
+              ? "bg-red-400"
+              : "bg-gray-300"
+          }`}
+        />
+      ))}
+    </div>
+  );
+
   return (
-    <div className="max-w-md mx-auto mt-10 space-y-4">
+    <div className="max-w-md mx-auto mt-10 bg-white p-6 rounded-lg shadow-md">
+      <h2 className="text-2xl font-semibold text-center mb-6">
+        Complete Your Profile
+      </h2>
+
       {stepError && <Alert type="error" message={stepError} />}
 
       {/* Step 1: Username */}
@@ -98,7 +143,7 @@ const CompleteProfile = () => {
           <Input
             label="Phone"
             name="phone"
-            placeholder="Your phone number"
+            placeholder="Your phone number (optional)"
             value={formData.phone}
             onChange={handleChange}
           />
@@ -111,14 +156,14 @@ const CompleteProfile = () => {
           <Input
             label="Location"
             name="location"
-            placeholder="City, Country"
+            placeholder="City, Country (optional)"
             value={formData.location}
             onChange={handleChange}
           />
           <Input
             label="Website"
             name="website"
-            placeholder="https://example.com"
+            placeholder="https://example.com (optional)"
             value={formData.website}
             onChange={handleChange}
           />
@@ -126,19 +171,15 @@ const CompleteProfile = () => {
       )}
 
       {/* Navigation Buttons */}
-      <div className="flex justify-between mt-4">
+      <div className="flex justify-between mt-6">
         {step > 1 && (
-          <Button type="button" onClick={handlePrev}>
+          <Button type="button" onClick={handlePrev} variant="outline">
             Back
           </Button>
         )}
 
         {step < 3 && (
-          <Button
-            type="button"
-            onClick={handleNext}
-            disabled={checkingUsername}
-          >
+          <Button type="button" onClick={handleNext} disabled={checkingUsername}>
             {checkingUsername ? (
               <div className="flex items-center justify-center gap-2">
                 <Spinner size={5} /> Checking...
@@ -163,7 +204,7 @@ const CompleteProfile = () => {
       </div>
 
       {/* Step Indicator */}
-      <p className="text-center text-sm text-gray-500 mt-2">Step {step} of 3</p>
+      <StepIndicator />
     </div>
   );
 };

@@ -3,40 +3,43 @@ import { useAuth } from "../context/AuthContext";
 import { FullScreenSpinner } from "../components/ui/Loader";
 import { ROUTE } from "./route";
 
-/**
- * @param {ReactNode} children - Component(s) to render if allowed
- * @param {boolean} adminOnly - Restrict to admin users
- * @param {boolean} requireIncompleteProfile - Restrict to users who have incomplete profile
- */
 const ProtectedRoute = ({
-  children,
-  adminOnly = false,
-  requireIncompleteProfile = false,
+	children,
+	adminOnly = false,
+	requireIncompleteProfile = false,
+	guestOnly = false,
 }) => {
-  const { isLoggedIn, hydrating, user } = useAuth();
+	const { isLoggedIn, hydrating, user } = useAuth();
 
-  // Wait for session restore before ANY redirect
-  if (hydrating) return <FullScreenSpinner />;
+	if (hydrating) return <FullScreenSpinner />;
 
-  if (!isLoggedIn) return <Navigate to={ROUTE.login} replace />;
+	// Guests-only pages (login/register)
+	if (guestOnly && isLoggedIn) {
+		// Allow unverified users to access /verify
+		if (user?.isEmailVerified === false) return children;
+		return <Navigate to={ROUTE.home} replace />;
+	}
 
-  // Restrict admin-only routes
-  if (adminOnly && user?.role !== "admin") {
-    return <Navigate to={ROUTE.home} replace />;
-  }
+	// Not logged in
+	if (!guestOnly && !isLoggedIn) return <Navigate to={ROUTE.login} replace />;
 
-  // Redirect users with complete profile away from onboarding
-  if (requireIncompleteProfile && user?.username) {
-    // Add other fields if necessary, e.g., bio, phone
-    return <Navigate to={ROUTE.home} replace />;
-  }
+	// Admin-only pages
+	if (adminOnly && user?.role !== "admin") return <Navigate to={ROUTE.home} replace />;
 
-  // Redirect users with incomplete profile to onboarding
-  if (!requireIncompleteProfile && !user?.username) {
-    return <Navigate to={ROUTE.completeProfile} replace />;
-  }
+	// Require incomplete profile
+	if (requireIncompleteProfile && user?.username) return <Navigate to={ROUTE.home} replace />;
 
-  return children;
+	// Logged-in users without username
+	if (!requireIncompleteProfile && isLoggedIn && !user?.username) {
+		if (user?.isEmailVerified === false) return <Navigate to={ROUTE.verify} replace />;
+		return <Navigate to={ROUTE.completeProfile} replace />;
+	}
+
+	if (isLoggedIn && user?.isEmailVerified === false && !guestOnly) {
+		return <Navigate to={ROUTE.verify} replace />;
+	}
+
+	return children;
 };
 
 export default ProtectedRoute;
