@@ -4,6 +4,6 @@ const { togglePostLike, getPostLikeStatus } = require('../controllers/likeContro
 const {protect} = require('../middleware/authMiddleware'); // ensure user is logged in
 
 router.post('/:postId', protect, togglePostLike);
-router.get('/status/:postId', protect, getPostLikeStatus);
+router.get('/status/:postId', getPostLikeStatus);
 
 module.exports = router;
