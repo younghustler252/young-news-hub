@@ -49,7 +49,7 @@ const createPost = asyncHandler(async (req, res) => {
         tags: processedTags,
         coverImageUrl: coverImageUrl || '',
         author: req.user._id,
-        status: 'pending', // still requires approval
+        status: 'approved', // still requires approval
     });
 
     const savedPost = await newPost.save();

@@ -4,7 +4,7 @@ import AdminSidebar from "../admin/AdminSidebar";
 import { FiMenu } from "react-icons/fi";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-
+ 
 const AdminLayout = () => {
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
